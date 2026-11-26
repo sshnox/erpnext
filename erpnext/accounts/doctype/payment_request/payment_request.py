@@ -5,7 +5,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.query_builder.functions import Sum
-from frappe.utils import cint, flt, nowdate
+from frappe.utils import cint, flt, nowdate, validate_email_address
 from frappe.utils.background_jobs import enqueue
 
 from erpnext import get_company_currency
@@ -357,8 +357,8 @@ class PaymentRequest(Document):
 				self.set_payment_request_url()
 
 			if not (self.mute_email or self.flags.mute_email):
-				self.send_email()
-				self.make_communication_entry()
+				if self.send_email():
+					self.make_communication_entry()
 
 	def on_submit(self):
 		self.update_reference_advance_payment_status()
@@ -703,10 +703,20 @@ class PaymentRequest(Document):
 		):
 			frappe.throw(_("Payment Link couldn't be sent."))
 
+		if not self.has_valid_email_recipient():
+			frappe.throw(_("A valid email address in To is required to resend the payment email."))
+
 		self.send_email()
 
+	def has_valid_email_recipient(self):
+		return bool(validate_email_address(self.email_to))
+
 	def send_email(self):
-		"""send email with payment link"""
+		"""Send a payment email only when To contains a valid email address."""
+		if not self.has_valid_email_recipient():
+			frappe.msgprint(_("No valid email address in To, so the payment email was not sent."), indicator="orange")
+			return False
+
 		email_args = {
 			"recipients": self.email_to,
 			"sender": None,
@@ -733,6 +743,7 @@ class PaymentRequest(Document):
 			enqueue_after_commit=True,
 			**email_args,
 		)
+		return True
 
 	def get_message(self):
 		"""return message with payment gateway link"""
