@@ -1492,6 +1492,38 @@ class TestPaymentRequest(ERPNextTestSuite):
 			pr.insert,
 		)
 
+	def test_payment_email_recipient_validation(self):
+		from erpnext.accounts.doctype.payment_request.payment_request import PaymentRequest
+
+		pr = frappe.new_doc("Payment Request")
+		for recipient in ("", "Administrator", "Guest", "not-an-email"):
+			with self.subTest(recipient=recipient):
+				pr.email_to = recipient
+				self.assertFalse(PaymentRequest.has_valid_email_recipient(pr))
+
+		pr.email_to = "customer@example.com"
+		self.assertTrue(PaymentRequest.has_valid_email_recipient(pr))
+
+	def test_resend_payment_email_rejects_invalid_saved_recipient(self):
+		so = make_sales_order()
+		pr = make_payment_request(
+			dt="Sales Order",
+			dn=so.name,
+			recipient_id="customer@example.com",
+			mute_email=1,
+			payment_gateway_account="_Test Gateway - INR - _TC",
+			submit_doc=1,
+			return_doc=1,
+		)
+		pr.db_set("email_to", "Administrator")
+
+		self.assertRaisesRegex(
+			frappe.ValidationError,
+			r"valid email address",
+			pr.resend_payment_email,
+		)
+		self.send_email.assert_not_called()
+
 	def test_resend_payment_email_uses_saved_values(self):
 		so = make_sales_order()
 		pr = make_payment_request(
