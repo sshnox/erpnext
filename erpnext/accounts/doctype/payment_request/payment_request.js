@@ -52,6 +52,8 @@ frappe.ui.form.on("Payment Request", "refresh", function (frm) {
 		frm.doc.payment_request_type == "Inward" &&
 		frm.doc.payment_channel !== "Phone" &&
 		!["Initiated", "Paid"].includes(frm.doc.status) &&
+		// Only offer to resend when To contains a usable email address.
+		/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((frm.doc.email_to || "").trim()) &&
 		!frm.doc.__islocal &&
 		frm.doc.docstatus == 1
 	) {
